@@ -1,0 +1,1455 @@
+<!--
+  ============================================================
+  DFINITY EVENTS DASHBOARD – Vibe Code Edition
+  ============================================================
+  Built for iteration with Caffeine.ai or any AI code tool.
+
+  STRUCTURE:
+  1. <style>        – All CSS (dark theme, cards, charts, tables)
+  2. <header>       – Title + 8-tab navigation
+  3. .filter-bar    – Global source filter (All / DFINITY / ICP Hub / Community)
+  4. <main>         – 8 tab panels:
+       - #tab-overview       – KPIs + YoY bar + selection rate line
+       - #tab-seasonality    – Monthly bar (source-filterable)
+       - #tab-geography      – Region stacked bar + country table + Swiss trend
+       - #tab-types          – Type mix bar + owned vs external donut
+       - #tab-budget         – Budget horizontal bar + anchor grid + benchmark table
+       - #tab-topics         – Topic bar + activation bar
+       - #tab-participation  – Source donut, mode donut, quarterly bar, cost by region
+       - #tab-hackathons     – Hackathon KPIs, investment, funnel, partners, pipeline
+  5. <script>       – Chart.js 4.4.1, 20 charts total, source filter logic
+
+  CHARTS THAT RESPOND TO SOURCE FILTER:
+  - yoyChart, seasonChart, quarterlyChart (+ KPI card update)
+
+  DATA: All data is hardcoded in JS. Key data object: srcData {}
+  THEME: bg #0f1117, cards #161b27, accent #3b82f6, text #e2e8f0
+  FONTS: system font stack (-apple-system, BlinkMacSystemFont, Segoe UI)
+  ============================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DFINITY Events Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* ── THEME TOKENS ── */
+/* bg-body: #0f1117 | bg-card: #161b27 | bg-hover: #1a2236 | border: #1e2535 */
+/* text-primary: #e2e8f0 | text-secondary: #94a3b8 | text-muted: #475569 | text-dim: #64748b */
+/* accent-blue: #3b82f6 | accent-indigo: #818cf8 | accent-green: #34d399 | accent-amber: #f59e0b | accent-red: #f87171 */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    min-height: 100vh;
+  }
+  header {
+    padding: 28px 40px 0;
+    border-bottom: 1px solid #1e2535;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f8fafc;
+    letter-spacing: -0.3px;
+  }
+  header p {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 4px;
+  }
+  nav {
+    display: flex;
+    gap: 0;
+    margin-top: 20px;
+  }
+  nav button {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    letter-spacing: 0.1px;
+  }
+  nav button:hover { color: #cbd5e1; }
+  nav button.active {
+    color: #3b82f6;
+    border-bottom-color: #3b82f6;
+  }
+  /* Filter bar */
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 40px;
+    background: #131720;
+    border-bottom: 1px solid #1e2535;
+  }
+  .filter-bar .filter-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-right: 4px;
+  }
+  .filter-bar button {
+    background: #161b27;
+    border: 1px solid #1e2535;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .filter-bar button:hover { border-color: #334155; color: #94a3b8; }
+  .filter-bar button.active { background: #1e3a5f; border-color: #3b82f6; color: #60a5fa; }
+  .filter-bar .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  main { padding: 32px 40px 60px; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  /* KPI cards */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .kpi {
+    background: #161b27;
+    border: 1px solid #1e2535;
+    border-radius: 10px;
+    padding: 20px 22px;
+  }
+  .kpi .label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .kpi .value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin-top: 6px;
+    line-height: 1;
+  }
+  .kpi .sub {
+    font-size: 12px;
+    color: #475569;
+    margin-top: 6px;
+  }
+  .kpi .trend-up { color: #34d399; }
+  .kpi .trend-down { color: #f87171; }
+
+  /* Chart containers */
+  .chart-card {
+    background: #161b27;
+    border: 1px solid #1e2535;
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 24px;
+  }
+  .chart-card h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .chart-card .caption {
+    font-size: 12px;
+    color: #475569;
+    margin-bottom: 20px;
+  }
+  .chart-wrap { position: relative; }
+  .chart-wrap.tall { height: 320px; }
+  .chart-wrap.medium { height: 260px; }
+  .chart-wrap.short { height: 220px; }
+
+  /* Two-column layout */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  /* Annotation */
+  .annotation {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: #1a2035;
+    border-left: 3px solid #3b82f6;
+    border-radius: 0 6px 6px 0;
+    line-height: 1.5;
+  }
+
+  /* Budget table */
+  .budget-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 13px;
+  }
+  .budget-table th {
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1px solid #1e2535;
+  }
+  .budget-table td {
+    padding: 11px 16px;
+    border-bottom: 1px solid #1a2236;
+    color: #cbd5e1;
+  }
+  .budget-table tr:last-child td { border-bottom: none; }
+  .budget-table tr:hover td { background: #1a2236; }
+  .range-pill {
+    display: inline-block;
+    background: #1e2d47;
+    color: #60a5fa;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* Recurring events */
+  .anchor-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 4px;
+  }
+  .anchor-item {
+    background: #161b27;
+    border: 1px solid #1e2535;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .anchor-item .name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e2e8f0;
+  }
+  .anchor-item .meta {
+    font-size: 12px;
+    color: #475569;
+    margin-top: 4px;
+  }
+  .tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .tag-jan { background: #1e2d3d; color: #60a5fa; }
+  .tag-apr { background: #1e3328; color: #34d399; }
+  .tag-jun { background: #2d2214; color: #fb923c; }
+  .tag-sep { background: #2d1e2e; color: #c084fc; }
+  .tag-oct { background: #2d1e1e; color: #f87171; }
+  .tag-feb { background: #1e2535; color: #94a3b8; }
+  .tag-yr  { background: #1e2535; color: #94a3b8; }
+
+  /* Three-column layout */
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+  /* Stat row */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #1a2236;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 13px; color: #94a3b8; }
+  .stat-value { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+
+  /* Geography country table */
+  .country-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 16px;
+  }
+  .country-table th {
+    text-align: left;
+    padding: 8px 14px;
+    font-size: 11px;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    border-bottom: 1px solid #1e2535;
+  }
+  .country-table td { padding: 9px 14px; border-bottom: 1px solid #1a2236; color: #cbd5e1; }
+  .country-table tr:last-child td { border-bottom: none; }
+  .bar-mini {
+    height: 6px;
+    background: #3b82f6;
+    border-radius: 3px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 8px;
+  }
+
+  footer {
+    text-align: center;
+    font-size: 11px;
+    color: #334155;
+    padding: 24px 0 8px;
+    border-top: 1px solid #1a2236;
+    margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>DFINITY Events Dashboard</h1>
+  <p>Global event footprint · 2022 – 2026 · Source: internal Airtable export, processed March 2026</p>
+  <nav>
+    <button class="active" onclick="showTab('overview', this)">Overview</button>
+    <button onclick="showTab('seasonality', this)">Seasonality</button>
+    <button onclick="showTab('geography', this)">Geography</button>
+    <button onclick="showTab('types', this)">Event Types</button>
+    <button onclick="showTab('budget', this)">Budget & Anchors</button>
+    <button onclick="showTab('topics', this)">Topics & Activations</button>
+    <button onclick="showTab('participation', this)">Participation</button>
+    <button onclick="showTab('hackathons', this)">Hackathons</button>
+  </nav>
+</header>
+
+<div class="filter-bar">
+  <span class="filter-label">Source Filter</span>
+  <button class="active" onclick="setSource('all', this)">All Sources</button>
+  <button onclick="setSource('dfinity', this)"><span class="dot" style="background:#3b82f6"></span>DFINITY Direct</button>
+  <button onclick="setSource('hub', this)"><span class="dot" style="background:#818cf8"></span>ICP Hub</button>
+  <button onclick="setSource('community', this)"><span class="dot" style="background:#34d399"></span>Community Grantees</button>
+</div>
+
+<main>
+
+  <!-- TAB 1: OVERVIEW -->
+  <div id="tab-overview" class="tab active">
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="label">Total Events</div>
+        <div class="value" id="kpi-total">564</div>
+        <div class="sub" id="kpi-source-label">Completed 2022 – 2026</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Countries Reached</div>
+        <div class="value">30+</div>
+        <div class="sub">Across full history</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Peak Year</div>
+        <div class="value">2023</div>
+        <div class="sub">280 events completed</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Current Selection Rate</div>
+        <div class="value">54<span style="font-size:18px;color:#64748b">%</span></div>
+        <div class="sub"><span class="trend-down">↓</span> from 100% in 2022</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h2>Events by Year</h2>
+      <div class="caption">Completed vs. declined/passed on</div>
+      <div class="chart-wrap medium">
+        <canvas id="yoyChart"></canvas>
+      </div>
+      <div class="annotation">
+        Selection rate has dropped from 100% in 2022 to ~54% in 2025 — reflecting a deliberate, criteria-driven approach to event investment post-ICP Hub era.
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h2>Selection Rate Trend</h2>
+      <div class="caption">% of evaluated events actually attended</div>
+      <div class="chart-wrap short">
+        <canvas id="selectionChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: SEASONALITY -->
+  <div id="tab-seasonality" class="tab">
+    <div class="chart-card">
+      <h2>Events by Month</h2>
+      <div class="caption">All completed events across full history (2022–2026)</div>
+      <div class="chart-wrap tall">
+        <canvas id="seasonChart"></canvas>
+      </div>
+      <div class="annotation">
+        <strong style="color:#f59e0b">October–November is peak season.</strong> Plan 3–4 months ahead for anything in this window — budget approvals, venue bookings, and speaker outreach all need to happen in summer. January–May is the quietest window and the best time for internal planning.
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: GEOGRAPHY -->
+  <div id="tab-geography" class="tab">
+    <div class="chart-card">
+      <h2>Events by Region per Year</h2>
+      <div class="caption">How geographic focus has shifted over time</div>
+      <div class="chart-wrap tall">
+        <canvas id="geoChart"></canvas>
+      </div>
+      <div class="annotation">
+        2022–2023 was Asia-led, driven by ICP Hub community activity. Since 2024, Europe – and Switzerland – has become the clear anchor. Asia re-entered in late 2025 through Bitcoin-focused events in Hong Kong and China.
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <h2>Top Countries (Mar 2025 – Jan 2026)</h2>
+        <div class="caption">Mareen's full-responsibility period</div>
+        <table class="country-table">
+          <thead><tr><th>Country</th><th>Events</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>Switzerland</td><td>16</td><td><span class="bar-mini" style="width:80px"></span></td></tr>
+            <tr><td>USA</td><td>7</td><td><span class="bar-mini" style="width:35px"></span></td></tr>
+            <tr><td>Online</td><td>4</td><td><span class="bar-mini" style="width:20px"></span></td></tr>
+            <tr><td>France</td><td>4</td><td><span class="bar-mini" style="width:20px"></span></td></tr>
+            <tr><td>UAE</td><td>3</td><td><span class="bar-mini" style="width:15px"></span></td></tr>
+            <tr><td>Germany</td><td>2</td><td><span class="bar-mini" style="width:10px"></span></td></tr>
+            <tr><td>Hong Kong</td><td>2</td><td><span class="bar-mini" style="width:10px"></span></td></tr>
+            <tr><td>China</td><td>2</td><td><span class="bar-mini" style="width:10px"></span></td></tr>
+            <tr><td>UK</td><td>2</td><td><span class="bar-mini" style="width:10px"></span></td></tr>
+            <tr><td>Others</td><td>6</td><td><span class="bar-mini" style="width:30px; background:#475569"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="chart-card">
+        <h2>Swiss Events Over Time</h2>
+        <div class="caption">Switzerland as the consistent anchor</div>
+        <div class="chart-wrap medium" style="height:200px">
+          <canvas id="swissChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: EVENT TYPES -->
+  <div id="tab-types" class="tab">
+    <div class="chart-card">
+      <h2>Event Type Mix by Year</h2>
+      <div class="caption">How DFINITY's event format strategy has evolved</div>
+      <div class="chart-wrap tall">
+        <canvas id="typeChart"></canvas>
+      </div>
+      <div class="annotation">
+        Hackathon volume spiked in 2023 (86 events – ICP Hub-driven across India, Africa, LATAM) before sharply contracting to just 7 in 2024. VIP and exclusive events grew through 2024 as focus shifted toward investor and institutional audiences. Hackathons are returning in 2025 but in a targeted, DFINITY-direct format.
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h2>Owned vs. External Events</h2>
+      <div class="caption">Hosted/own-format vs. conferences and external events attended</div>
+      <div class="two-col" style="align-items:center">
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="ownExtChart"></canvas>
+        </div>
+        <div>
+          <div style="font-size:13px; color:#94a3b8; margin-bottom:16px">Mareen's period (Aug 2024 – Jan 2026)</div>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px">
+            <div style="width:12px;height:12px;border-radius:3px;background:#3b82f6;flex-shrink:0"></div>
+            <div>
+              <div style="font-size:13px; font-weight:600; color:#e2e8f0">16 own / hosted events</div>
+              <div style="font-size:12px; color:#475569">Office events, side events, ICP.Lab</div>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px">
+            <div style="width:12px;height:12px;border-radius:3px;background:#6366f1;flex-shrink:0"></div>
+            <div>
+              <div style="font-size:13px; font-weight:600; color:#e2e8f0">53 external events</div>
+              <div style="font-size:12px; color:#475569">Conferences, hackathons, meetups attended</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: BUDGET & ANCHORS -->
+  <div id="tab-budget" class="tab">
+    <div class="chart-card">
+      <h2>Budget Benchmarks</h2>
+      <div class="caption">Based on actual recorded spend · All figures CHF</div>
+      <div class="chart-wrap medium">
+        <canvas id="budgetChart"></canvas>
+      </div>
+      <table class="budget-table" style="margin-top:24px">
+        <thead>
+          <tr>
+            <th>Format</th>
+            <th>Typical Range</th>
+            <th>Example Events</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Major flagship (own format)</td>
+            <td><span class="range-pill">CHF 50k – 120k</span></td>
+            <td style="color:#64748b">Chain Fusion Day, World Computer Summit</td>
+          </tr>
+          <tr>
+            <td>Major external conference</td>
+            <td><span class="range-pill">CHF 50k – 85k</span></td>
+            <td style="color:#64748b">ETH Denver, Paris Blockchain Week</td>
+          </tr>
+          <tr>
+            <td>Mid-size Swiss conference</td>
+            <td><span class="range-pill">CHF 15k – 55k</span></td>
+            <td style="color:#64748b">CV Summit, CfC St. Moritz, CVC</td>
+          </tr>
+          <tr>
+            <td>Hackathon (external)</td>
+            <td><span class="range-pill">CHF 8k – 30k</span></td>
+            <td style="color:#64748b">Encode London, ETH Prague</td>
+          </tr>
+          <tr>
+            <td>Side event / hosted evening</td>
+            <td><span class="range-pill">CHF 1k – 15k</span></td>
+            <td style="color:#64748b">Multichain Evening, Hack Seasons</td>
+          </tr>
+          <tr>
+            <td>Office / internal event</td>
+            <td><span class="range-pill">CHF 700 – 3k</span></td>
+            <td style="color:#64748b">MBA Visit, Brand Loyalty Edition</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="chart-card">
+      <h2>Recurring Calendar Anchors</h2>
+      <div class="caption">Events appearing 2+ years – high-confidence annual commitments</div>
+      <div class="anchor-grid">
+        <div class="anchor-item">
+          <div class="name">CfC St. Moritz</div>
+          <div class="meta">Elite finance / crypto crossover crowd</div>
+          <span class="tag tag-jan">January</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">World Computer Day – Davos</div>
+          <div class="meta">DFINITY own-format, WEF week</div>
+          <span class="tag tag-jan">January</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">ETH Denver</div>
+          <div class="meta">Major developer conference</div>
+          <span class="tag tag-feb">Feb / Mar</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">Paris Blockchain Week</div>
+          <div class="meta">European institutional and VC presence</div>
+          <span class="tag tag-apr">April</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">Crypto Valley Conference</div>
+          <div class="meta">Core Swiss crypto institution, annual anchor</div>
+          <span class="tag tag-jun">June</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">Swiss Web3 Fest</div>
+          <div class="meta">Major annual Swiss Web3 event week</div>
+          <span class="tag tag-sep">September</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">Token2049</div>
+          <div class="meta">One of the largest global crypto conferences</div>
+          <span class="tag tag-sep">September · Singapore</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">CV Summit</div>
+          <div class="meta">Tier 1 · High institutional overlap</div>
+          <span class="tag tag-oct">October</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">AI+X Summit (ETH Zurich)</div>
+          <div class="meta">DFINITY × ETH partnership event</div>
+          <span class="tag tag-oct">October</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">Encode Hackathon London</div>
+          <div class="meta">UK developer audience</div>
+          <span class="tag tag-oct">October</span>
+        </div>
+        <div class="anchor-item">
+          <div class="name">Binance events (various)</div>
+          <div class="meta">Growing institutional relationship</div>
+          <span class="tag tag-yr">Year-round</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 6: TOPICS & ACTIVATIONS -->
+  <div id="tab-topics" class="tab">
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="label">Top Topic</div>
+        <div class="value" style="font-size:24px">Blockchain</div>
+        <div class="sub">142 completed events</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Fastest Growing Topic</div>
+        <div class="value" style="font-size:24px">AI</div>
+        <div class="sub">Rising since 2024</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Top Activation</div>
+        <div class="value" style="font-size:24px">Panel</div>
+        <div class="sub">49 events (excl. hackathons)</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Keynote Appearances</div>
+        <div class="value">35</div>
+        <div class="sub">Across all events</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <h2>Event Topics</h2>
+        <div class="caption">Primary topic tag on completed events</div>
+        <div class="chart-wrap tall">
+          <canvas id="topicChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h2>Activation Types</h2>
+        <div class="caption">How DFINITY participates at events</div>
+        <div class="chart-wrap tall">
+          <canvas id="activationChart"></canvas>
+        </div>
+        <div class="annotation">
+          Panels are the most common activation format (49), followed by keynotes (35) and workshops (27). Booth presence is relatively rare (5) – DFINITY favours content-led participation over exhibition.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 7: PARTICIPATION -->
+  <div id="tab-participation" class="tab">
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="label">Total Spend</div>
+        <div class="value" style="font-size:24px">1.27<span style="font-size:16px;color:#64748b">M</span></div>
+        <div class="sub">CHF across 171 events with cost data</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Median Cost</div>
+        <div class="value" style="font-size:24px">2<span style="font-size:16px;color:#64748b">k</span></div>
+        <div class="sub">CHF per event</div>
+      </div>
+      <div class="kpi">
+        <div class="label">IRL Events</div>
+        <div class="value">576</div>
+        <div class="sub">73% of all events</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Attending vs Organizing</div>
+        <div class="value" style="font-size:24px">68<span style="font-size:16px;color:#64748b">%</span></div>
+        <div class="sub">365 attending, 170 organizing</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <h2>Event Source</h2>
+        <div class="caption">Who sourced or drove the event</div>
+        <div class="chart-wrap medium">
+          <canvas id="sourceChart"></canvas>
+        </div>
+        <div class="annotation">
+          DFINITY-direct events make up 47% of all completed activity. ICP Hubs contributed 36% (primarily 2023) and Web3 Community Grantees 14%.
+        </div>
+      </div>
+      <div class="chart-card">
+        <h2>Event Mode</h2>
+        <div class="caption">In-person, virtual, or hybrid</div>
+        <div class="chart-wrap medium">
+          <canvas id="modeChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h2>Quarterly Volume</h2>
+      <div class="caption">Completed vs. declined events per quarter</div>
+      <div class="chart-wrap tall">
+        <canvas id="quarterlyChart"></canvas>
+      </div>
+      <div class="annotation">
+        Q4 2023 was the absolute peak (176 completed events in a single quarter), driven by the ICP Hub expansion. Since then, volume has normalised to 15–40 events per quarter with an increasingly selective approach.
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h2>Cost by Region</h2>
+      <div class="caption">Total estimated cost where data is available</div>
+      <div class="chart-wrap medium">
+        <canvas id="costRegionChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 8: HACKATHONS -->
+  <div id="tab-hackathons" class="tab">
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="label">Total Hackathons</div>
+        <div class="value">37</div>
+        <div class="sub">2022 – 2025 (Growth Team data)</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Total Registrants</div>
+        <div class="value">7,473</div>
+        <div class="sub">Across all tracked hackathons</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Total Submissions</div>
+        <div class="value">842</div>
+        <div class="sub">11.3% conversion rate</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Total Investment</div>
+        <div class="value" style="font-size:24px">$2.47<span style="font-size:16px;color:#64748b">M</span></div>
+        <div class="sub">Cash prizes + dev grants</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <h2>Hackathons by Year</h2>
+        <div class="caption">Volume and category split (DFINITY-organised vs. sponsored)</div>
+        <div class="chart-wrap medium">
+          <canvas id="hackYearChart"></canvas>
+        </div>
+        <div class="annotation">
+          2022 was a single flagship event (Supernova). Volume peaked in 2024 with 20 hackathons – mostly sponsored. 2025 shows a deliberate shift back toward fewer, more strategic engagements.
+        </div>
+      </div>
+      <div class="chart-card">
+        <h2>Investment by Year</h2>
+        <div class="caption">Cash prizes vs. developer grants (USD)</div>
+        <div class="chart-wrap medium">
+          <canvas id="hackInvestChart"></canvas>
+        </div>
+        <div class="annotation">
+          2022's $1.53M was almost entirely Supernova (the flagship hackathon with $765k in prizes + $765k in grants). Since then, dev grants consistently outweigh cash prizes – reflecting a strategy of funding builders over one-off winners.
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <h2>Registrants & Submissions</h2>
+        <div class="caption">Developer engagement funnel by year</div>
+        <div class="chart-wrap medium">
+          <canvas id="hackFunnelChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h2>Conversion Rate</h2>
+        <div class="caption">Submissions as % of registrants</div>
+        <div class="chart-wrap medium">
+          <canvas id="hackConvChart"></canvas>
+        </div>
+        <div class="annotation">
+          Conversion dropped significantly in 2024–2025 as hackathon formats shifted to larger-reach, lower-barrier events. Supernova (2022) set the benchmark at 10.3%.
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h2>Top Organiser Partners</h2>
+      <div class="caption">Number of hackathons by partner (all time)</div>
+      <div class="chart-wrap medium">
+        <canvas id="hackPartnerChart"></canvas>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="chart-card">
+        <h2>2025–26 Hackathon Pipeline</h2>
+        <div class="caption">Growth team's current plan status</div>
+        <div class="chart-wrap" style="height:200px">
+          <canvas id="hackPipelineChart"></canvas>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h2>Prize Distribution Status</h2>
+        <div class="caption">Of 138 total prize records in Airtable</div>
+        <div style="padding:16px 0">
+          <div class="stat-row">
+            <span class="stat-label">Total prize records</span>
+            <span class="stat-value">138</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Cash prizes tracked (shown batch)</span>
+            <span class="stat-value">$124,000</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Dev grants tracked (shown batch)</span>
+            <span class="stat-value">$195,000</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Distributed</span>
+            <span class="stat-value" style="color:#34d399">14 of 41</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Pending distribution</span>
+            <span class="stat-value" style="color:#f59e0b">27 of 41</span>
+          </div>
+        </div>
+        <div class="annotation">
+          Only 34% of tracked prizes have been distributed. This is a potential follow-up item for the growth team.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Source: DFINITY internal Airtable export · Processed March 2026 · DFINITY Foundation
+</footer>
+
+<script>
+// Tab navigation
+function showTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// Chart defaults
+Chart.defaults.color = '#64748b';
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+Chart.defaults.font.size = 12;
+
+const gridColor = '#1e2535';
+const tooltipBg = '#1a2236';
+
+const baseOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      labels: { color: '#94a3b8', padding: 16, boxWidth: 12, boxHeight: 12 }
+    },
+    tooltip: {
+      backgroundColor: tooltipBg,
+      borderColor: '#2d3a52',
+      borderWidth: 1,
+      titleColor: '#e2e8f0',
+      bodyColor: '#94a3b8',
+      padding: 10,
+    }
+  },
+  scales: {
+    x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+    y: { grid: { color: gridColor }, ticks: { color: '#475569' } }
+  }
+};
+
+// ====== SOURCE FILTER DATA ======
+const srcData = {
+  // YoY completed by source [2022, 2023, 2024, 2025]
+  yoy: {
+    all:       [48, 280, 174, 64],
+    dfinity:   [6, 94, 126, 41],
+    hub:       [0, 152, 41, 11],
+    community: [42, 34, 4, 0],
+  },
+  // Monthly by source [Jan..Dec]
+  month: {
+    all:       [36,28,29,32,28,44,42,30,67,116,79,33],
+    dfinity:   [23,12,19,24,17,26,32,13,28,34,24,15],
+    hub:       [10,13,4,6,1,2,3,10,28,74,41,12],
+    community: [2,3,4,2,9,15,6,5,9,7,12,6],
+  },
+  // Quarterly completed by source [Q2'22..Q4'25]
+  quarterly: {
+    all:       [22,13,13,13,23,68,176,58,41,42,33,22,18,16,6],
+    dfinity:   [3,2,1,3,9,23,59,33,26,36,31,18,14,7,2],
+    hub:       [0,0,0,0,4,38,110,16,12,6,7,4,3,4,0],
+    community: [19,11,12,10,10,6,6,9,3,0,0,0,0,0,0],
+  },
+  labels: { all: 'All Sources', dfinity: 'DFINITY Direct', hub: 'ICP Hub', community: 'Community Grantees' },
+  colors: { all: '#3b82f6', dfinity: '#3b82f6', hub: '#818cf8', community: '#34d399' },
+};
+
+let currentSource = 'all';
+
+function setSource(src, btn) {
+  currentSource = src;
+  document.querySelectorAll('.filter-bar button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateFilteredCharts();
+}
+
+function updateFilteredCharts() {
+  const s = currentSource;
+  const c = srcData.colors[s];
+  const peakMonths = [8,9,10];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // YoY chart
+  if (s === 'all') {
+    yoyChart.data.datasets = [
+      { label: 'DFINITY Direct', data: srcData.yoy.dfinity, backgroundColor: '#3b82f6', borderRadius: 4 },
+      { label: 'ICP Hub', data: srcData.yoy.hub, backgroundColor: '#818cf8', borderRadius: 4 },
+      { label: 'Community Grantees', data: srcData.yoy.community, backgroundColor: '#34d399', borderRadius: 4 },
+    ];
+    yoyChart.options.scales.x.stacked = true;
+    yoyChart.options.scales.y.stacked = true;
+  } else {
+    yoyChart.data.datasets = [
+      { label: srcData.labels[s], data: srcData.yoy[s], backgroundColor: c, borderRadius: 4 }
+    ];
+    yoyChart.options.scales.x.stacked = false;
+    yoyChart.options.scales.y.stacked = false;
+  }
+  yoyChart.update();
+
+  // Seasonality chart
+  if (s === 'all') {
+    seasonChart.data.datasets = [
+      { label: 'DFINITY Direct', data: srcData.month.dfinity, backgroundColor: '#3b82f6', borderRadius: 2 },
+      { label: 'ICP Hub', data: srcData.month.hub, backgroundColor: '#818cf8', borderRadius: 2 },
+      { label: 'Community Grantees', data: srcData.month.community, backgroundColor: '#34d399', borderRadius: 2 },
+    ];
+    seasonChart.options.scales.x.stacked = true;
+    seasonChart.options.scales.y.stacked = true;
+    seasonChart.options.plugins.legend = { display: true, labels: { color: '#94a3b8', padding: 16, boxWidth: 12, boxHeight: 12 } };
+  } else {
+    seasonChart.data.datasets = [{
+      label: srcData.labels[s],
+      data: srcData.month[s],
+      backgroundColor: months.map((_, i) => peakMonths.includes(i) ? '#f59e0b' : c),
+      borderRadius: 4,
+    }];
+    seasonChart.options.scales.x.stacked = false;
+    seasonChart.options.scales.y.stacked = false;
+    seasonChart.options.plugins.legend = { display: false };
+  }
+  seasonChart.update();
+
+  // Quarterly chart
+  if (s === 'all') {
+    quarterlyChart.data.datasets = [
+      { label: 'DFINITY Direct', data: srcData.quarterly.dfinity, backgroundColor: '#3b82f6', borderRadius: 2 },
+      { label: 'ICP Hub', data: srcData.quarterly.hub, backgroundColor: '#818cf8', borderRadius: 2 },
+      { label: 'Community', data: srcData.quarterly.community, backgroundColor: '#34d399', borderRadius: 2 },
+    ];
+  } else {
+    quarterlyChart.data.datasets = [
+      { label: srcData.labels[s], data: srcData.quarterly[s], backgroundColor: c, borderRadius: 3 }
+    ];
+  }
+  quarterlyChart.update();
+
+  // Update KPI cards
+  const total = srcData.yoy[s].reduce((a,b) => a+b, 0);
+  document.getElementById('kpi-total').textContent = total;
+  document.getElementById('kpi-source-label').textContent = s === 'all' ? 'Completed 2022 – 2026' : srcData.labels[s] + ' events';
+}
+
+// 1. YoY Chart (stacked by source in "All" mode)
+const yoyChart = new Chart(document.getElementById('yoyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['2022', '2023', '2024', '2025'],
+    datasets: [
+      { label: 'DFINITY Direct', data: srcData.yoy.dfinity, backgroundColor: '#3b82f6', borderRadius: 4 },
+      { label: 'ICP Hub', data: srcData.yoy.hub, backgroundColor: '#818cf8', borderRadius: 4 },
+      { label: 'Community Grantees', data: srcData.yoy.community, backgroundColor: '#34d399', borderRadius: 4 },
+    ]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569' } }
+    }
+  }
+});
+
+// 2. Selection Rate
+new Chart(document.getElementById('selectionChart'), {
+  type: 'line',
+  data: {
+    labels: ['2022', '2023', '2024', '2025'],
+    datasets: [{
+      label: 'Selection rate (%)',
+      data: [100, 81, 62, 54],
+      borderColor: '#f59e0b',
+      backgroundColor: 'rgba(245,158,11,0.08)',
+      pointBackgroundColor: '#f59e0b',
+      pointRadius: 5,
+      tension: 0.3,
+      fill: true,
+    }]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { grid: { color: gridColor }, ticks: { color: '#475569', callback: v => v + '%' }, min: 0, max: 110 }
+    }
+  }
+});
+
+// 3. Seasonality (stacked by source in "All" mode)
+const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const seasonChart = new Chart(document.getElementById('seasonChart'), {
+  type: 'bar',
+  data: {
+    labels: months,
+    datasets: [
+      { label: 'DFINITY Direct', data: srcData.month.dfinity, backgroundColor: '#3b82f6', borderRadius: 2 },
+      { label: 'ICP Hub', data: srcData.month.hub, backgroundColor: '#818cf8', borderRadius: 2 },
+      { label: 'Community Grantees', data: srcData.month.community, backgroundColor: '#34d399', borderRadius: 2 },
+    ]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569' } }
+    }
+  }
+});
+
+// 4. Geography stacked bar
+new Chart(document.getElementById('geoChart'), {
+  type: 'bar',
+  data: {
+    labels: ['2022', '2023', '2024', '2025'],
+    datasets: [
+      { label: 'Europe', data: [10, 58, 68, 17], backgroundColor: '#3b82f6', borderRadius: 2 },
+      { label: 'Asia', data: [35, 128, 36, 3], backgroundColor: '#818cf8', borderRadius: 2 },
+      { label: 'North America', data: [2, 21, 12, 5], backgroundColor: '#34d399', borderRadius: 2 },
+      { label: 'Middle East', data: [0, 20, 11, 0], backgroundColor: '#f59e0b', borderRadius: 2 },
+      { label: 'Africa', data: [1, 21, 1, 0], backgroundColor: '#f87171', borderRadius: 2 },
+      { label: 'South America', data: [0, 12, 4, 0], backgroundColor: '#a78bfa', borderRadius: 2 },
+    ]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569' } }
+    }
+  }
+});
+
+// 5. Swiss events
+new Chart(document.getElementById('swissChart'), {
+  type: 'bar',
+  data: {
+    labels: ['2022', '2023', '2024', '2025'],
+    datasets: [{
+      label: 'Swiss events',
+      data: [1, 34, 47, 22],
+      backgroundColor: '#3b82f6',
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    ...baseOptions,
+    plugins: { ...baseOptions.plugins, legend: { display: false } }
+  }
+});
+
+// 6. Type mix
+new Chart(document.getElementById('typeChart'), {
+  type: 'bar',
+  data: {
+    labels: ['2022', '2023', '2024', '2025'],
+    datasets: [
+      { label: 'Conference', data: [5, 95, 90, 25], backgroundColor: '#3b82f6', borderRadius: 2 },
+      { label: 'Hackathon', data: [0, 86, 7, 12], backgroundColor: '#f59e0b', borderRadius: 2 },
+      { label: 'Meetup / Community', data: [42, 53, 39, 13], backgroundColor: '#34d399', borderRadius: 2 },
+      { label: 'Office / Hosted', data: [0, 9, 6, 5], backgroundColor: '#818cf8', borderRadius: 2 },
+      { label: 'VIP / Exclusive', data: [0, 9, 11, 1], backgroundColor: '#f87171', borderRadius: 2 },
+    ]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { grid: { color: gridColor }, ticks: { color: '#475569' } }
+    }
+  }
+});
+
+// 7. Owned vs External donut
+new Chart(document.getElementById('ownExtChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Own / Hosted', 'External'],
+    datasets: [{
+      data: [16, 53],
+      backgroundColor: ['#3b82f6', '#6366f1'],
+      borderWidth: 0,
+      hoverOffset: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { backgroundColor: tooltipBg, borderColor: '#2d3a52', borderWidth: 1, titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10 }
+    }
+  }
+});
+
+// 8. Budget horizontal bar
+new Chart(document.getElementById('budgetChart'), {
+  type: 'bar',
+  data: {
+    labels: [
+      'Office / Internal',
+      'Side Event / Evening',
+      'Hackathon (External)',
+      'Mid-size Swiss Conf.',
+      'Major External Conf.',
+      'Major Flagship (Own)'
+    ],
+    datasets: [{
+      label: 'Typical midpoint (CHF)',
+      data: [1850, 8000, 19000, 35000, 67500, 85000],
+      backgroundColor: ['#1e3a5f','#1e3a5f','#1e4a6e','#2a5a9f','#3b82f6','#60a5fa'],
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    ...baseOptions,
+    indexAxis: 'y',
+    plugins: {
+      ...baseOptions.plugins,
+      legend: { display: false },
+      tooltip: {
+        ...baseOptions.plugins.tooltip,
+        callbacks: {
+          label: ctx => ' CHF ' + ctx.raw.toLocaleString()
+        }
+      }
+    },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569', callback: v => 'CHF ' + (v/1000).toFixed(0) + 'k' } },
+      y: { grid: { color: 'transparent' }, ticks: { color: '#94a3b8' } }
+    }
+  }
+});
+
+// 9. Topic distribution (horizontal bar)
+new Chart(document.getElementById('topicChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Blockchain','Web3','ETH','BTC','Mainstream','AI','Tech','DeFi','Sustainability','NFT'],
+    datasets: [{
+      label: 'Events',
+      data: [142, 58, 26, 21, 19, 19, 16, 10, 9, 10],
+      backgroundColor: ['#3b82f6','#818cf8','#6366f1','#f59e0b','#34d399','#f87171','#a78bfa','#fb923c','#2dd4bf','#c084fc'],
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    ...baseOptions,
+    indexAxis: 'y',
+    plugins: { ...baseOptions.plugins, legend: { display: false } },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { grid: { color: 'transparent' }, ticks: { color: '#94a3b8', font: { size: 11 } } }
+    }
+  }
+});
+
+// 10. Activation types (horizontal bar)
+new Chart(document.getElementById('activationChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Panel','Keynote','Workshop','Side Event','Networking','Booth','Pitch Event'],
+    datasets: [{
+      label: 'Events',
+      data: [49, 35, 27, 20, 19, 5, 6],
+      backgroundColor: ['#3b82f6','#60a5fa','#818cf8','#34d399','#f59e0b','#f87171','#a78bfa'],
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    ...baseOptions,
+    indexAxis: 'y',
+    plugins: { ...baseOptions.plugins, legend: { display: false } },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { grid: { color: 'transparent' }, ticks: { color: '#94a3b8', font: { size: 11 } } }
+    }
+  }
+});
+
+// 11. Source donut
+new Chart(document.getElementById('sourceChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['DFINITY Direct', 'ICP Hubs', 'Community Grantees', 'External'],
+    datasets: [{
+      data: [267, 204, 80, 12],
+      backgroundColor: ['#3b82f6', '#818cf8', '#34d399', '#475569'],
+      borderWidth: 0,
+      hoverOffset: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 16, boxWidth: 12 } },
+      tooltip: { backgroundColor: tooltipBg, borderColor: '#2d3a52', borderWidth: 1, titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10 }
+    }
+  }
+});
+
+// 12. Mode donut
+new Chart(document.getElementById('modeChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['In-Person (IRL)', 'Virtual', 'Hybrid'],
+    datasets: [{
+      data: [576, 69, 64],
+      backgroundColor: ['#3b82f6', '#818cf8', '#34d399'],
+      borderWidth: 0,
+      hoverOffset: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 16, boxWidth: 12 } },
+      tooltip: { backgroundColor: tooltipBg, borderColor: '#2d3a52', borderWidth: 1, titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10 }
+    }
+  }
+});
+
+// 13. Quarterly trends
+const quarterlyChart = new Chart(document.getElementById('quarterlyChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Q2 22','Q3 22','Q4 22','Q1 23','Q2 23','Q3 23','Q4 23','Q1 24','Q2 24','Q3 24','Q4 24','Q1 25','Q2 25','Q3 25','Q4 25'],
+    datasets: [
+      { label: 'DFINITY Direct', data: srcData.quarterly.dfinity, backgroundColor: '#3b82f6', borderRadius: 2 },
+      { label: 'ICP Hub', data: srcData.quarterly.hub, backgroundColor: '#818cf8', borderRadius: 2 },
+      { label: 'Community', data: srcData.quarterly.community, backgroundColor: '#34d399', borderRadius: 2 },
+    ]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569', font: { size: 10 } } },
+      y: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569' } }
+    }
+  }
+});
+
+// 14. Cost by region
+new Chart(document.getElementById('costRegionChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Europe', 'Asia', 'Middle East', 'North America', 'Africa', 'South America', 'Online'],
+    datasets: [{
+      label: 'Total Cost (CHF)',
+      data: [409513, 210150, 182200, 132050, 54000, 15000, 6000],
+      backgroundColor: ['#3b82f6','#818cf8','#f59e0b','#34d399','#f87171','#a78bfa','#475569'],
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    ...baseOptions,
+    plugins: {
+      ...baseOptions.plugins,
+      legend: { display: false },
+      tooltip: {
+        ...baseOptions.plugins.tooltip,
+        callbacks: { label: ctx => ' CHF ' + ctx.raw.toLocaleString() }
+      }
+    },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { grid: { color: gridColor }, ticks: { color: '#475569', callback: v => 'CHF ' + (v/1000).toFixed(0) + 'k' } }
+    }
+  }
+});
+
+// ====== HACKATHON CHARTS ======
+
+// 15. Hackathons by year (stacked: DFINITY Organising vs Sponsoring)
+new Chart(document.getElementById('hackYearChart'), {
+  type: 'bar',
+  data: {
+    labels: ['2022', '2023', '2024', '2025'],
+    datasets: [
+      { label: 'DFINITY Organising', data: [1, 3, 4, 1], backgroundColor: '#3b82f6', borderRadius: 4 },
+      { label: 'Sponsoring', data: [0, 3, 16, 9], backgroundColor: '#818cf8', borderRadius: 4 },
+    ]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { stacked: true, grid: { color: gridColor }, ticks: { color: '#475569' } }
+    }
+  }
+});
+
+// 16. Investment by year (grouped: Cash prizes vs Dev grants)
+new Chart(document.getElementById('hackInvestChart'), {
+  type: 'bar',
+  data: {
+    labels: ['2022', '2023', '2024', '2025'],
+    datasets: [
+      { label: 'Cash Prizes', data: [765000, 48000, 187250, 32250], backgroundColor: '#f59e0b', borderRadius: 4 },
+      { label: 'Dev Grants', data: [765000, 180000, 435000, 60000], backgroundColor: '#3b82f6', borderRadius: 4 },
+    ]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { grid: { color: gridColor }, ticks: { color: '#475569', callback: v => '$' + (v/1000).toFixed(0) + 'k' } }
+    },
+    plugins: {
+      ...baseOptions.plugins,
+      tooltip: {
+        ...baseOptions.plugins.tooltip,
+        callbacks: { label: ctx => ' $' + ctx.raw.toLocaleString() }
+      }
+    }
+  }
+});
+
+// 17. Registrants & Submissions grouped bar
+new Chart(document.getElementById('hackFunnelChart'), {
+  type: 'bar',
+  data: {
+    labels: ['2022', '2023', '2024', '2025'],
+    datasets: [
+      { label: 'Registrants', data: [3565, 516, 1651, 1741], backgroundColor: '#3b82f6', borderRadius: 4 },
+      { label: 'Submissions', data: [368, 54, 294, 126], backgroundColor: '#34d399', borderRadius: 4 },
+    ]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { grid: { color: gridColor }, ticks: { color: '#475569' } }
+    }
+  }
+});
+
+// 18. Conversion rate line
+new Chart(document.getElementById('hackConvChart'), {
+  type: 'line',
+  data: {
+    labels: ['2022', '2023', '2024', '2025'],
+    datasets: [{
+      label: 'Conversion %',
+      data: [10.3, 10.5, 17.8, 7.2],
+      borderColor: '#f59e0b',
+      backgroundColor: 'rgba(245,158,11,0.08)',
+      pointBackgroundColor: '#f59e0b',
+      pointRadius: 5,
+      tension: 0.3,
+      fill: true,
+    }]
+  },
+  options: {
+    ...baseOptions,
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { grid: { color: gridColor }, ticks: { color: '#475569', callback: v => v + '%' }, min: 0, max: 25 }
+    }
+  }
+});
+
+// 19. Top partners horizontal bar
+new Chart(document.getElementById('hackPartnerChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Encode Club', 'Knowledge Foundation', 'ETH Denver', 'Bitcoin Startup Lab', 'AI Agents', 'ETH Global', 'Others'],
+    datasets: [{
+      label: 'Hackathons',
+      data: [14, 4, 2, 2, 2, 1, 12],
+      backgroundColor: ['#3b82f6','#60a5fa','#818cf8','#f59e0b','#34d399','#a78bfa','#475569'],
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    ...baseOptions,
+    indexAxis: 'y',
+    plugins: { ...baseOptions.plugins, legend: { display: false } },
+    scales: {
+      x: { grid: { color: gridColor }, ticks: { color: '#475569' } },
+      y: { grid: { color: 'transparent' }, ticks: { color: '#94a3b8', font: { size: 11 } } }
+    }
+  }
+});
+
+// 20. Pipeline donut
+new Chart(document.getElementById('hackPipelineChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Done', 'Confirmed', 'Declined', 'New'],
+    datasets: [{
+      data: [4, 5, 15, 1],
+      backgroundColor: ['#34d399', '#3b82f6', '#f87171', '#f59e0b'],
+      borderWidth: 0,
+      hoverOffset: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 12, boxWidth: 12 } },
+      tooltip: { backgroundColor: tooltipBg, borderColor: '#2d3a52', borderWidth: 1, titleColor: '#e2e8f0', bodyColor: '#94a3b8', padding: 10 }
+    }
+  }
+});
+</script>
+</body>
+</html>

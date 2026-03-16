@@ -1,0 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #22263a;
+  --border: #2d3148;
+  --text: #e8eaf0;
+  --text-muted: #8b90a8;
+  --blue: #3b82f6;
+  --blue-dim: rgba(59,130,246,0.15);
+  --amber: #f59e0b;
+  --green: #10b981;
+  --red: #ef4444;
+  --purple: #a78bfa;
+  --teal: #14b8a6;
+  --lime: #d4f042;
+
+  /* Tailwind OKLCH tokens */
+  --background: 0.12 0.018 260;
+  --foreground: 0.92 0.01 260;
+  --card: 0.17 0.022 258;
+  --card-foreground: 0.92 0.01 260;
+  --popover: 0.17 0.022 258;
+  --popover-foreground: 0.92 0.01 260;
+  --primary: 0.62 0.18 258;
+  --primary-foreground: 0.98 0.005 260;
+  --secondary: 0.2 0.04 258;
+  --secondary-foreground: 0.92 0.01 260;
+  --muted: 0.2 0.04 258;
+  --muted-foreground: 0.6 0.03 260;
+  --accent: 0.2 0.04 258;
+  --accent-foreground: 0.92 0.01 260;
+  --destructive: 0.62 0.22 25;
+  --destructive-foreground: 0.98 0.005 260;
+  --border: 0.26 0.05 260;
+  --input: 0.26 0.05 260;
+  --ring: 0.62 0.18 258;
+  --radius: 10px;
+  --chart-1: 0.62 0.18 258;
+  --chart-2: 0.7 0.17 164;
+  --chart-3: 0.73 0.16 66;
+  --chart-4: 0.72 0.15 295;
+  --chart-5: 0.7 0.13 195;
+  --sidebar: 0.17 0.022 258;
+  --sidebar-foreground: 0.92 0.01 260;
+  --sidebar-primary: 0.62 0.18 258;
+  --sidebar-primary-foreground: 0.98 0.005 260;
+  --sidebar-accent: 0.2 0.04 258;
+  --sidebar-accent-foreground: 0.92 0.01 260;
+  --sidebar-border: 0.26 0.05 260;
+  --sidebar-ring: 0.62 0.18 258;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.pulse-dot {
+  animation: pulse-dot 1.5s infinite;
+}
+
+/* Recharts overrides */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(255,255,255,0.06);
+}
