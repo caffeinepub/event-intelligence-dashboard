@@ -45,10 +45,13 @@ export function SeasonalityTab({ source }: Props) {
 
   const chartData = months.map((m, i) => ({
     month: m,
-    DFINITY: srcData.month.dfinity[i],
-    "ICP Hub": srcData.month.hub[i],
-    Community: srcData.month.community[i],
-    [srcData.labels[source]]: srcData.month[source][i],
+    ...(isAll
+      ? {
+          DFINITY: srcData.month.dfinity[i],
+          "ICP Hub": srcData.month.hub[i],
+          Community: srcData.month.community[i],
+        }
+      : { [srcData.labels[source]]: srcData.month[source][i] }),
     peak: peakMonths.includes(i),
   }));
 
@@ -97,6 +100,7 @@ export function SeasonalityTab({ source }: Props) {
         <div style={{ height: 360 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
+              key={source}
               data={chartData}
               margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
             >

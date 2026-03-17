@@ -35,22 +35,23 @@ interface Props {
 }
 
 export function OverviewTab({ source }: Props) {
+  const isAll = source === "all";
+
   const total = (srcData.yoy[source] as unknown as number[]).reduce(
     (a, b) => a + b,
     0,
   );
 
-  const yoyChartData = years.map((year, i) => {
-    if (source === "all") {
-      return {
-        year,
-        DFINITY: srcData.yoy.dfinity[i],
-        "ICP Hub": srcData.yoy.hub[i],
-        Community: srcData.yoy.community[i],
-      };
-    }
-    return { year, [srcData.labels[source]]: srcData.yoy[source][i] };
-  });
+  const yoyChartData = years.map((year, i) => ({
+    year,
+    ...(isAll
+      ? {
+          DFINITY: srcData.yoy.dfinity[i],
+          "ICP Hub": srcData.yoy.hub[i],
+          Community: srcData.yoy.community[i],
+        }
+      : { [srcData.labels[source]]: srcData.yoy[source][i] }),
+  }));
 
   const color = srcData.colors[source];
 
@@ -191,6 +192,7 @@ export function OverviewTab({ source }: Props) {
         <div style={{ height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
+              key={source}
               data={yoyChartData}
               margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
               barCategoryGap="30%"
@@ -228,7 +230,7 @@ export function OverviewTab({ source }: Props) {
                 iconType="rect"
                 iconSize={12}
               />
-              {source === "all" ? (
+              {isAll ? (
                 <>
                   <Bar
                     dataKey="DFINITY"

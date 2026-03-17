@@ -77,17 +77,18 @@ interface Props {
 }
 
 export function ParticipationTab({ source }: Props) {
-  const quarterlyChartData = quarterlyLabels.map((label, i) => {
-    if (source === "all") {
-      return {
-        label,
-        DFINITY: srcData.quarterly.dfinity[i],
-        "ICP Hub": srcData.quarterly.hub[i],
-        Community: srcData.quarterly.community[i],
-      };
-    }
-    return { label, [srcData.labels[source]]: srcData.quarterly[source][i] };
-  });
+  const isAll = source === "all";
+
+  const quarterlyChartData = quarterlyLabels.map((label, i) => ({
+    label,
+    ...(isAll
+      ? {
+          DFINITY: srcData.quarterly.dfinity[i],
+          "ICP Hub": srcData.quarterly.hub[i],
+          Community: srcData.quarterly.community[i],
+        }
+      : { [srcData.labels[source]]: srcData.quarterly[source][i] }),
+  }));
 
   return (
     <section>
@@ -342,6 +343,7 @@ export function ParticipationTab({ source }: Props) {
         <div style={{ height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
+              key={source}
               data={quarterlyChartData}
               margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
             >
@@ -367,7 +369,7 @@ export function ParticipationTab({ source }: Props) {
                 itemStyle={tooltipItemStyle}
                 cursor={{ fill: "rgba(255,255,255,0.04)" }}
               />
-              {source === "all" ? (
+              {isAll ? (
                 <Legend
                   wrapperStyle={{
                     color: "#8b90a8",
@@ -378,7 +380,7 @@ export function ParticipationTab({ source }: Props) {
                   iconSize={12}
                 />
               ) : null}
-              {source === "all" ? (
+              {isAll ? (
                 <>
                   <Bar
                     dataKey="DFINITY"
